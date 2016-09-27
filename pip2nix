@@ -1,0 +1,129 @@
+#!/usr/bin/env python
+
+# Based on this "dry run" pip install script
+# https://github.com/BackSlasher/chef-backslasher-python/blob/90631c3/files/default/smart_install.py
+from pip.req import RequirementSet
+import pip
+import sys
+from string import Template
+import re
+import subprocess
+import os
+
+def show_usage():
+  print("Usage: pip2nix requirements.txt [-o outputFile]")
+  exit()
+
+name_fixes = {
+  'catkin-tools': 'catkin_tools',
+  'catkin-pkg': 'catkin_pkg',
+  'semantic-version': 'semantic_version',
+  'PyYAML': 'pyyaml',
+}
+
+def fix_name(name):
+  r = name_fixes.get(name)
+  if r == None:
+    return name
+  else:
+    return r
+
+package_template = Template("""
+"$name" = buildPythonPackage {
+  name = "$version";
+  src = fetchurl {
+    url = "$url";
+    sha256 = "$sha256";
+  };
+  inherit doCheck;
+  $dep_string
+};
+""")
+
+def parse_version(url):
+  m = re.search(r'/([^/]+)(\.tar\.gz|\.zip)', url)
+  if m == None:
+    return "none"
+  else:
+    n = re.match(r"(.*)-(\d[\d.]*)$", m.group(1))
+    if n == None:
+      return ""
+    else:
+      return n.group(2)
+
+def trim_url(url):
+  m = re.search(r'^(.*)#md5=.*$', url)
+  if m == None:
+    return url
+  else:
+    return m.group(1)
+
+def get_hash(url):
+  with open(os.devnull, 'w') as devnull:
+    return subprocess.check_output(["nix-prefetch-url", url],
+                                   stderr=devnull).strip()
+
+def get_deps(name, version):
+  if name == "lockfile":
+    # This is a setup_requires rather than an install_requires
+    return ["pbr"]
+  str = subprocess.check_output(["pip", "download",
+                                 name+("" if version == "" else "=="+version),
+                                 "-d","/tmp","--no-binary",":all:"])
+  deps = []
+  for ln in str.splitlines():
+    m = re.match(r"Collecting ([^=>< ]*)", ln)
+    if m != None and m.group(1) != name:
+      deps.append(fix_name(m.group(1)))
+  return deps
+
+def print_indented(of, num_spaces, str):
+  of.write("\n".join(num_spaces * ' ' + ln for ln in str.splitlines()))
+  of.write("\n")
+
+def main(argv):
+  if len(argv) < 2:
+    show_usage()
+
+  if argv[1] == '-o':
+    if len(argv < 4):
+      show_usage()
+    output_file = open(argv[2], 'w')
+    input_file = argv[3]
+  elif argv[2] == '-o':
+    output_file = open(argv[3], 'w')
+    input_file = argv[1]
+  else:
+    input_file = argv[1]
+    output_file = sys.stdout
+
+  args = ['install', '-r', input_file, '-q', '--no-binary', ':all:']
+
+  to_install=[]
+
+  def my_install(self, install_options, global_options=(), *args, **kwargs):
+    to_install.extend([r for r in self.requirements.values() if not r.satisfied_by])
+
+  # Crucial monkey-patch that intercepts pip's installation actions
+  RequirementSet.install = my_install
+
+  pip.main(args)
+
+  output_file.write("{ fetchurl, buildPythonPackage, doCheck ? false, extradeps ? {} }:\n")
+  output_file.write("with extradeps;\n")
+  output_file.write("rec {\n")
+  for r in to_install:
+    trimmed_url = trim_url(r.link.url)
+    version = parse_version(trimmed_url)
+    dep_string = "buildInputs = [ " + " ".join(get_deps(r.name, version)) + " ];"
+    name = fix_name(r.name)
+    d = dict(name       = name,
+             version    = name + ("" if version == "" else "-"+version),
+             url        = trimmed_url,
+             sha256     = get_hash(trimmed_url),
+             dep_string = dep_string)
+    print_indented(output_file, 2, package_template.substitute(d))
+  output_file.write("}\n")
+
+if __name__ == "__main__":
+  main(sys.argv)
