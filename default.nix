@@ -2,5 +2,5 @@
 buildPythonApplication {
   name = "pip2nix";
   src = ./.;
-  buildInputs = [ pip ];
+  propagatedBuildInputs = [ pip ];
 }
