@@ -10,6 +10,7 @@ import re
 import subprocess
 import os
 import tempfile
+import shutil
 
 def show_usage():
   print("Usage: pip2nix requirements.txt [-o outputFile]")
@@ -69,9 +70,11 @@ def get_deps(name, version):
   if name == "lockfile":
     # This is a setup_requires rather than an install_requires
     return ["pbr"]
-  str = subprocess.check_output(["pip", "-q", "download",
+  tmp = tempfile.mkdtemp();
+  str = subprocess.check_output(["pip", "--disable-pip-version-check", "download",
                                  name+("" if version == "" else "=="+version),
-                                 "-d","/tmp","--no-binary",":all:"])
+                                 "-d",tmp,"--no-binary",":all:"])
+  shutil.rmtree(tmp)
   deps = []
   for ln in str.splitlines():
     m = re.match(r"Collecting ([^=>< ]*)", ln)
