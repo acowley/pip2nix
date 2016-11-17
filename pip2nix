@@ -71,7 +71,8 @@ def get_deps(name, version):
     # This is a setup_requires rather than an install_requires
     return ["pbr"]
   tmp = tempfile.mkdtemp();
-  str = subprocess.check_output(["pip", "--disable-pip-version-check", "download",
+  str = subprocess.check_output(["pip", "--disable-pip-version-check",
+                                 "--no-cache-dir", "download",
                                  name+("" if version == "" else "=="+version),
                                  "-d",tmp,"--no-binary",":all:"])
   shutil.rmtree(tmp)
