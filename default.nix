@@ -1,6 +1,8 @@
-{ stdenv, buildPythonApplication, pip }:
+{ stdenv, buildPythonApplication, pip, nix, cacert }:
 buildPythonApplication {
   name = "pip2nix";
   src = ./.;
-  propagatedBuildInputs = [ pip ];
+  buildInputs = [ cacert ];
+  propagatedBuildInputs = [ pip nix ];
+  setupHook = ./setup-hook.sh;
 }
