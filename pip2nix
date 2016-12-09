@@ -66,6 +66,11 @@ def get_hash(url):
     return subprocess.check_output(["nix-prefetch-url", url],
                                    stderr=devnull).strip()
 
+# buildInputs that must be provided by the caller
+system_lib_deps = {
+  'pillow': [ "freetype", "libjpeg", "zlib", "libtiff", "libwebp", "tcl", "lcms2" ]
+}
+
 def get_deps(name, version):
   if name == "lockfile":
     # This is a setup_requires rather than an install_requires
@@ -81,7 +86,7 @@ def get_deps(name, version):
     m = re.match(r"Collecting ([^=>< ]*)", ln)
     if m != None and m.group(1) != name:
       deps.append(fix_name(m.group(1)))
-  return deps
+  return system_lib_deps.get(name.lower()) + deps
 
 def print_indented(of, num_spaces, str):
   of.write("\n".join(num_spaces * ' ' + ln for ln in str.splitlines()))
