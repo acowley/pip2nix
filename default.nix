@@ -4,5 +4,6 @@ buildPythonApplication {
   src = ./.;
   buildInputs = [ cacert ];
   propagatedBuildInputs = [ pip nix ];
+  inherit cacert;
   setupHook = ./setup-hook.sh;
 }
